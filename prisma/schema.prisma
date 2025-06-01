@@ -1,0 +1,151 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  password      String
+  role          Role      @default(MEMBER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  events        Event[]   @relation("EventOrganizer")
+  rsvps         RSVP[]
+  rideRequests  RideRequest[]
+  carpools      Carpool[] @relation("CarpoolDriver")
+  passengers    Carpool[] @relation("CarpoolPassengers")
+  polls         Poll[]    @relation("UserPolls")
+  pollVotes     PollVote[] @relation("UserPollVotes")
+  resetToken    String?
+  resetTokenExpiry DateTime?
+  rideOffers    RideOffer[] @relation("UserRideOffers")
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  title       String
+  description String
+  date        DateTime
+  time        String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  organizer   User      @relation("EventOrganizer", fields: [organizerId], references: [id])
+  organizerId String
+  rsvps       RSVP[]
+  rideRequests RideRequest[]
+  rideOffers  RideOffer[]
+}
+
+model RSVP {
+  id        String   @id @default(cuid())
+  status    RSVPStatus
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  event     Event    @relation(fields: [eventId], references: [id])
+  eventId   String
+
+  @@unique([userId, eventId])
+}
+
+model RideRequest {
+  id             String   @id @default(cuid())
+  pickupLocation String
+  status         RequestStatus @default(PENDING)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id])
+  userId         String
+  event          Event    @relation(fields: [eventId], references: [id])
+  eventId        String
+  carpool        Carpool? @relation(fields: [carpoolId], references: [id])
+  carpoolId      String?
+}
+
+model Carpool {
+  id          String   @id @default(cuid())
+  maxPassengers Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  driver      User     @relation("CarpoolDriver", fields: [driverId], references: [id])
+  driverId    String
+  passengers  User[]   @relation("CarpoolPassengers")
+  rideRequests RideRequest[]
+}
+
+model Poll {
+  id          String   @id @default(cuid())
+  question    String
+  options     String[]
+  isActive    Boolean  @default(true)
+  createdBy   User     @relation("UserPolls", fields: [createdById], references: [id])
+  createdById String
+  createdAt   DateTime @default(now())
+  votes       PollVote[]
+  multipleChoice Boolean @default(false)
+}
+
+model PollVote {
+  id        String   @id @default(cuid())
+  poll      Poll     @relation(fields: [pollId], references: [id])
+  pollId    String
+  user      User     @relation("UserPollVotes", fields: [userId], references: [id])
+  userId    String
+  optionIdx Int
+  createdAt DateTime @default(now())
+
+  @@unique([pollId, userId, optionIdx])
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  author    String
+  createdAt DateTime @default(now())
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model RideOffer {
+  id        String   @id @default(cuid())
+  event     Event    @relation(fields: [eventId], references: [id])
+  eventId   String
+  driver    User     @relation("UserRideOffers", fields: [driverId], references: [id])
+  driverId  String
+  capacity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum RSVPStatus {
+  ATTENDING
+  NOT_ATTENDING
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+} 

@@ -1,0 +1,61 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  password     String
+  role         String    @default("MEMBER")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  events       Event[]   @relation("EventOrganizer")
+  carpools     Carpool[] @relation("CarpoolDriver")
+  rsvps        Event[]   @relation("EventAttendees")
+  carpoolRides Carpool[] @relation("CarpoolPassengers")
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  title       String
+  description String
+  date        DateTime
+  time        String
+  location    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  organizer   User      @relation("EventOrganizer", fields: [organizerId], references: [id])
+  organizerId String
+  attendees   User[]    @relation("EventAttendees")
+  carpools    Carpool[]
+  isRecurring Boolean   @default(false)
+  recurrence  String? // e.g., "weekly", "biweekly", "monthly"
+}
+
+model Carpool {
+  id             String   @id @default(cuid())
+  event          Event    @relation(fields: [eventId], references: [id])
+  eventId        String
+  driver         User     @relation("CarpoolDriver", fields: [driverId], references: [id])
+  driverId       String
+  passengers     User[]   @relation("CarpoolPassengers")
+  pickupTime     DateTime
+  pickupLocation String
+  availableSeats Int
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
