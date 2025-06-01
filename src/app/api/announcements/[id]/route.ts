@@ -4,15 +4,9 @@ import { adminAuth } from '@/lib/firebaseAdmin';
 
 const prisma = new PrismaClient();
 
-type RouteContext = {
-  params: {
-    id: string;
-  };
-};
-
 export async function DELETE(
   request: NextRequest,
-  context: RouteContext
+  { params }: { params: { id: string } }
 ) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -29,7 +23,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    await prisma.announcement.delete({ where: { id: context.params.id } });
+    await prisma.announcement.delete({ where: { id: params.id } });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('DELETE /api/announcements/[id] error:', error);
