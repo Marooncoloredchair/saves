@@ -2,12 +2,14 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { adminAuth } from '@/lib/firebaseAdmin';
 
+export const runtime = 'edge';
+
 const prisma = new PrismaClient();
 
 export async function DELETE(
   request: Request,
-  context: { params: { id: string } }
-) {
+  { params }: { params: { id: string } }
+): Promise<NextResponse> {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -23,7 +25,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    await prisma.announcement.delete({ where: { id: context.params.id } });
+    await prisma.announcement.delete({ where: { id: params.id } });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('DELETE /api/announcements/[id] error:', error);
