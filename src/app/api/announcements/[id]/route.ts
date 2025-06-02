@@ -1,12 +1,21 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { adminAuth } from '@/lib/firebaseAdmin';
 
 const prisma = new PrismaClient();
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+type RouteSegmentProps = {
+  params: {
+    id: string;
+  };
+};
+
+export async function DELETE(
+  request: NextRequest,
+  props: RouteSegmentProps
+) {
   try {
-    const authHeader = req.headers.get('authorization');
+    const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -20,7 +29,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    await prisma.announcement.delete({ where: { id: params.id } });
+    await prisma.announcement.delete({ where: { id: props.params.id } });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('DELETE /api/announcements/[id] error:', error);

@@ -13,9 +13,8 @@ export default [
   {
     ignores: [".next/**", "node_modules/**"],
   },
-  ...compat.extends("next/core-web-vitals"),
   {
-    files: ["**/*.ts", "**/*.tsx"],
+    files: ["**/*.{js,jsx,ts,tsx}"],
     languageOptions: {
       parser: "@typescript-eslint/parser",
       parserOptions: {
@@ -23,4 +22,5 @@ export default [
       },
     },
   },
+  ...compat.extends("next/core-web-vitals"),
 ];
