@@ -83,6 +83,12 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       return NextResponse.json({ error: 'Forbidden: Only admins can delete users.' }, { status: 403 });
     }
 
+    // Prevent deletion of the head admin account
+    const memberToDelete = await prisma.user.findUnique({ where: { id: params.id } });
+    if (memberToDelete && memberToDelete.email === 'admin@saves.org') {
+      return NextResponse.json({ error: 'Forbidden: Cannot delete the head admin account.' }, { status: 403 });
+    }
+
     await prisma.user.delete({ where: { id: params.id } });
     return NextResponse.json({ success: true });
   } catch (error: any) {

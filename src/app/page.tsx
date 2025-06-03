@@ -656,7 +656,7 @@ export default function DashboardPage() {
             columnClassName="masonry-column flex flex-col gap-6"
           >
             {/* Members Card */}
-            <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col max-h-56 w-full md:w-auto mb-2 overflow-y-auto scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-blue-50" style={{ minWidth: 0 }}>
+            <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col max-h-[600px] min-h-[200px] w-full md:w-auto mb-2 overflow-y-auto scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-blue-50" style={{ minWidth: 0 }}>
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-xl font-semibold text-blue-900">Members</h2>
                 {isAdmin && (
