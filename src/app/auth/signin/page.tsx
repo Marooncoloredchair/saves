@@ -7,6 +7,7 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswor
 export default function FirebaseAuthPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [name, setName] = useState("")
   const [isSignUp, setIsSignUp] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -18,10 +19,21 @@ export default function FirebaseAuthPage() {
     setError(null)
     setMessage(null)
     setLoading(true)
-    console.log("Attempting to sign in/sign up", { email, password, isSignUp })
+    console.log("Attempting to sign in/sign up", { email, password, isSignUp, name })
     try {
       if (isSignUp) {
+        if (!name) {
+          setError("Name is required for sign up.")
+          setLoading(false)
+          return
+        }
         const userCred = await createUserWithEmailAndPassword(auth, email, password)
+        // Send name to backend to update user record
+        await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password, uid: userCred.user.uid })
+        })
         setMessage("Account created! You are now signed in.")
         console.log("Sign up success", userCred.user)
         window.location.href = "/"
@@ -66,6 +78,16 @@ export default function FirebaseAuthPage() {
     <div className="min-h-screen flex items-center justify-center bg-blue-900">
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded shadow-md w-full max-w-md flex flex-col gap-4">
         <h1 className="text-2xl font-bold text-blue-900 mb-2">{isSignUp ? "Sign Up" : "Sign In"}</h1>
+        {isSignUp && (
+          <input
+            type="text"
+            placeholder="Name"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className="border rounded px-2 py-1"
+            required
+          />
+        )}
         <input
           type="email"
           placeholder="Email"

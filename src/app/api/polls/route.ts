@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import validator from 'validator';
 
-const prisma = new PrismaClient();
 
 // Dummy admin check (replace with real session/user check in production)
 async function isAdmin(userId: string) {

@@ -7,8 +7,8 @@ const prisma = new PrismaClient();
 export async function POST(req: Request) {
   try {
     const { name, email, password, uid } = await req.json();
-    if (!uid) {
-      return NextResponse.json({ error: 'Missing Firebase UID' }, { status: 400 });
+    if (!uid || !name) {
+      return NextResponse.json({ error: 'Missing Firebase UID or name' }, { status: 400 });
     }
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({

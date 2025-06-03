@@ -1,9 +1,8 @@
-import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { adminAuth } from '@/lib/firebaseAdmin'
 import validator from 'validator'
 
-const prisma = new PrismaClient()
 
 export async function GET() {
   try {

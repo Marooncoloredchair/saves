@@ -997,22 +997,24 @@ export default function DashboardPage() {
                 {quickLinks.map(link => (
                   <li key={link.id} className="mb-1 flex items-center gap-2">
                     {editingQuickLink?.id === link.id ? (
-                      <>
+                      <div className="flex items-center gap-2 w-full max-w-full flex-wrap">
                         <input
                           type="text"
                           value={editingQuickLink.label}
                           onChange={e => setEditingQuickLink(l => l && ({ ...l, label: e.target.value }))}
-                          className="border rounded px-1 text-sm w-28"
+                          className="border rounded px-1 text-sm w-24 max-w-[100px]"
+                          style={{ minWidth: 0 }}
                         />
                         <input
                           type="text"
                           value={editingQuickLink.url}
                           onChange={e => setEditingQuickLink(l => l && ({ ...l, url: e.target.value }))}
-                          className="border rounded px-1 text-sm w-48"
+                          className="border rounded px-1 text-sm w-40 max-w-[180px]"
+                          style={{ minWidth: 0 }}
                         />
-                        <button onClick={() => handleEditQuickLink(editingQuickLink)} className="text-green-600 text-xs">Save</button>
-                        <button onClick={() => setEditingQuickLink(null)} className="text-gray-500 text-xs">Cancel</button>
-                      </>
+                        <button onClick={() => handleEditQuickLink(editingQuickLink)} className="text-green-600 text-xs ml-1">Save</button>
+                        <button onClick={() => setEditingQuickLink(null)} className="text-gray-500 text-xs ml-1">Cancel</button>
+                      </div>
                     ) : (
                       <>
                         <a href={link.url} target="_blank" rel="noopener noreferrer" className="hover:underline">{link.label}</a>
