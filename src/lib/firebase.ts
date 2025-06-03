@@ -1,6 +1,6 @@
 // saves-dashboard/src/lib/firebase.ts
 import { initializeApp, getApps } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey: "AIzaSyBeOWaEeSQ-j7_r3t9BbfDqfGOsPJWzCMw",
@@ -15,3 +15,12 @@ const firebaseConfig = {
 // Prevent re-initialization in Next.js
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
 export const auth = getAuth(app)
+
+// Set persistence to local so users stay logged in
+setPersistence(auth, browserLocalPersistence)
+  .then(() => {
+    // Persistence set successfully
+  })
+  .catch((error) => {
+    console.error('Error setting Firebase Auth persistence:', error)
+  })
