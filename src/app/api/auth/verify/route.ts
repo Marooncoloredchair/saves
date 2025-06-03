@@ -16,15 +16,22 @@ export async function GET(req: Request) {
     const idToken = authHeader.split('Bearer ')[1];
     const decoded = await adminAuth.verifyIdToken(idToken);
     const firebaseUid = decoded.uid;
+    const email = decoded.email;
+    const name = decoded.name || email || 'User';
 
-    // Get user from database
-    const user = await prisma.user.findUnique({
-      where: { id: firebaseUid },
-      select: { role: true }
-    });
-
+    // Ensure user exists in DB (provision as MEMBER if not present)
+    let user = await prisma.user.findUnique({ where: { id: firebaseUid } });
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      user = await prisma.user.create({
+        data: {
+          id: firebaseUid,
+          name,
+          email: email || `user+${firebaseUid}@example.com`,
+          password: '',
+          role: 'MEMBER',
+        },
+      });
+      console.log('Auto-provisioned member user:', user.email);
     }
 
     return NextResponse.json({ role: user.role });
