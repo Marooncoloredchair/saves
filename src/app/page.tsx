@@ -171,6 +171,7 @@ export default function DashboardPage() {
   const [showAddMember, setShowAddMember] = useState(false)
   const [newMember, setNewMember] = useState({ name: '', email: '', role: 'MEMBER', password: '' })
   const [memberLoading, setMemberLoading] = useState(false)
+  const [showToast, setShowToast] = useState(false)
   
   // Memoize watermark lines
   const watermarkLines = useMemo(() => getWatermarkLines(60), [])
@@ -240,6 +241,14 @@ export default function DashboardPage() {
       .catch(() => setWeatherError('Failed to fetch weather'))
       .finally(() => setWeatherLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (error) {
+      setShowToast(true)
+      const timer = setTimeout(() => setShowToast(false), 4000)
+      return () => clearTimeout(timer)
+    }
+  }, [error])
 
   async function handleRSVP(eventId: string, status: 'ATTENDING' | 'NOT_ATTENDING') {
     if (!user) {
@@ -608,15 +617,34 @@ export default function DashboardPage() {
   }
 
   if (error) {
-    return (
-      <div className="min-h-screen bg-blue-900 flex items-center justify-center">
-        <div className="text-white text-xl">Error: {error}</div>
-      </div>
-    )
+    // Remove the full error overlay, just return null here
+    // Error will be shown as toast instead
+    // return (
+    //   <div className="min-h-screen bg-blue-900 flex items-center justify-center">
+    //     <div className="text-white text-xl">Error: {error}</div>
+    //   </div>
+    // )
+    // Instead, continue rendering the dashboard
   }
 
   return (
     <>
+      {/* Toast notification */}
+      {showToast && error && (
+        <div
+          className="fixed bottom-6 right-6 z-50 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-fade-in-out"
+          style={{ minWidth: 220, maxWidth: 350, transition: 'opacity 0.3s' }}
+        >
+          <span className="flex-1">{error}</span>
+          <button
+            className="ml-2 text-white text-lg font-bold hover:opacity-70"
+            onClick={() => { setShowToast(false); setError(null); }}
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        </div>
+      )}
       {/* Watermark background */}
       <div
         aria-hidden="true"
