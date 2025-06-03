@@ -88,6 +88,7 @@ interface Carpool {
 interface Member {
   id: string
   name: string
+  email: string
   role: 'ADMIN' | 'MEMBER'
   rideStatus?: 'OFFERING' | 'NEEDS' | null
 }
@@ -754,29 +755,34 @@ export default function DashboardPage() {
                           <option value="ADMIN">Admin</option>
                           <option value="MEMBER">Member</option>
                         </select>
-                        <button
-                          className="ml-2 text-xs text-red-600 hover:underline"
-                          onClick={async () => {
-                            if (!window.confirm('Are you sure you want to delete this user?')) return;
-                            try {
-                              const idToken = await user.getIdToken();
-                              const res = await fetch(`/api/members/${member.id}`, {
-                                method: 'DELETE',
-                                headers: { 'Authorization': `Bearer ${idToken}` },
-                              });
-                              if (res.ok) {
-                                setMembers(prev => prev.filter(m => m.id !== member.id));
-                              } else {
-                                const data = await res.json();
-                                setError(data.error || 'Failed to delete user');
+                        {/* Only show delete button if not head admin and not yourself */}
+                        {member.email !== 'admin@saves.org' && member.id !== user.uid ? (
+                          <button
+                            className="ml-2 text-xs text-red-600 hover:underline"
+                            onClick={async () => {
+                              if (!window.confirm('Are you sure you want to delete this user?')) return;
+                              try {
+                                const idToken = await user.getIdToken();
+                                const res = await fetch(`/api/members/${member.id}`, {
+                                  method: 'DELETE',
+                                  headers: { 'Authorization': `Bearer ${idToken}` },
+                                });
+                                if (res.ok) {
+                                  setMembers(prev => prev.filter(m => m.id !== member.id));
+                                } else {
+                                  const data = await res.json();
+                                  setError(data.error || 'Failed to delete user');
+                                }
+                              } catch (err) {
+                                setError('Failed to delete user');
                               }
-                            } catch (err) {
-                              setError('Failed to delete user');
-                            }
-                          }}
-                        >
-                          Delete
-                        </button>
+                            }}
+                          >
+                            Delete
+                          </button>
+                        ) : member.email === 'admin@saves.org' ? (
+                          <span className="ml-2 text-xs text-gray-400" title="Head admin cannot be deleted">Protected</span>
+                        ) : null}
                       </div>
                     )}
                   </li>
