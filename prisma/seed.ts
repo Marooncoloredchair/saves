@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, RSVPStatus } from '@prisma/client'
 import bcrypt from 'bcrypt'
 const prisma = new PrismaClient()
 
@@ -57,7 +57,7 @@ async function main() {
   // Create RSVPs
   await prisma.rSVP.create({
     data: {
-      status: 'GOING',
+      status: RSVPStatus.ATTENDING,
       userId: member.id,
       eventId: event1.id,
     },
