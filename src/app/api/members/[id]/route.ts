@@ -78,6 +78,11 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       console.log('Auto-provisioned member user:', user.email);
     }
 
+    // Only allow admins to delete users
+    if (user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden: Only admins can delete users.' }, { status: 403 });
+    }
+
     await prisma.user.delete({ where: { id: params.id } });
     return NextResponse.json({ success: true });
   } catch (error: any) {

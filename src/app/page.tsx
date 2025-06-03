@@ -701,30 +701,55 @@ export default function DashboardPage() {
                       )}
                     </span>
                     {isAdmin && (
-                      <select 
-                        value={member.role}
-                        onChange={async (e) => {
-                          try {
-                            const res = await fetch(`/api/members/${member.id}`, {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ role: e.target.value })
-                            })
-                            if (res.ok) {
-                              const updatedMember = await res.json()
-                              setMembers(prev => prev.map(m => 
-                                m.id === member.id ? updatedMember : m
-                              ))
+                      <div className="flex items-center gap-2">
+                        <select 
+                          value={member.role}
+                          onChange={async (e) => {
+                            try {
+                              const res = await fetch(`/api/members/${member.id}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ role: e.target.value })
+                              })
+                              if (res.ok) {
+                                const updatedMember = await res.json()
+                                setMembers(prev => prev.map(m => 
+                                  m.id === member.id ? updatedMember : m
+                                ))
+                              }
+                            } catch (err) {
+                              setError('Failed to update member role')
                             }
-                          } catch (err) {
-                            setError('Failed to update member role')
-                          }
-                        }}
-                        className="ml-2 border rounded px-1 text-xs"
-                      >
-                        <option value="ADMIN">Admin</option>
-                        <option value="MEMBER">Member</option>
-                      </select>
+                          }}
+                          className="ml-2 border rounded px-1 text-xs"
+                        >
+                          <option value="ADMIN">Admin</option>
+                          <option value="MEMBER">Member</option>
+                        </select>
+                        <button
+                          className="ml-2 text-xs text-red-600 hover:underline"
+                          onClick={async () => {
+                            if (!window.confirm('Are you sure you want to delete this user?')) return;
+                            try {
+                              const idToken = await user.getIdToken();
+                              const res = await fetch(`/api/members/${member.id}`, {
+                                method: 'DELETE',
+                                headers: { 'Authorization': `Bearer ${idToken}` },
+                              });
+                              if (res.ok) {
+                                setMembers(prev => prev.filter(m => m.id !== member.id));
+                              } else {
+                                const data = await res.json();
+                                setError(data.error || 'Failed to delete user');
+                              }
+                            } catch (err) {
+                              setError('Failed to delete user');
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     )}
                   </li>
                 ))}
