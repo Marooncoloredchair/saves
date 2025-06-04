@@ -95,4 +95,22 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     console.error('DELETE /api/members/[id] error:', error);
     return NextResponse.json({ error: error.message || 'Unknown error' }, { status: 500 });
   }
+}
+
+export async function PATCH(req, { params }) {
+  try {
+    const { rideStatus } = await req.json();
+    const memberId = params.id;
+    if (!rideStatus) {
+      return NextResponse.json({ error: 'Missing rideStatus' }, { status: 400 });
+    }
+    const updated = await prisma.user.update({
+      where: { id: memberId },
+      data: { rideStatus },
+    });
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error('PATCH /api/members/[id] error:', error);
+    return NextResponse.json({ error: error.message || 'Unknown error' }, { status: 500 });
+  }
 } 

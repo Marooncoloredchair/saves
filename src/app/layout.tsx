@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/components/providers/AuthProvider'
+import DarkModeToggle from '@/components/DarkModeToggle'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -22,6 +23,7 @@ export default function RootLayout({
         <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32" />
       </head>
       <body className={inter.className}>
+        <DarkModeToggle />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

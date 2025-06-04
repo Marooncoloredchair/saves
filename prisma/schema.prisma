@@ -43,6 +43,7 @@ model Event {
   rsvps       RSVP[]
   rideRequests RideRequest[]
   rideOffers  RideOffer[]
+  carpools    Carpool[]
 }
 
 model RSVP {
@@ -73,14 +74,18 @@ model RideRequest {
 }
 
 model Carpool {
-  id          String   @id @default(cuid())
-  maxPassengers Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  driver      User     @relation("CarpoolDriver", fields: [driverId], references: [id])
-  driverId    String
-  passengers  User[]   @relation("CarpoolPassengers")
-  rideRequests RideRequest[]
+  id             String   @id @default(cuid())
+  maxPassengers  Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  driver         User     @relation("CarpoolDriver", fields: [driverId], references: [id])
+  driverId       String
+  passengers     User[]   @relation("CarpoolPassengers")
+  rideRequests   RideRequest[]
+  pickupLocation String
+  pickupTime     DateTime
+  event          Event    @relation(fields: [eventId], references: [id])
+  eventId        String
 }
 
 model Poll {

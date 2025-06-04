@@ -17,19 +17,15 @@ interface Event {
 
 interface EventCardProps {
   event: Event
-  onRequestRide: () => void
   onDelete?: () => void
   onRSVP?: (status: 'ATTENDING' | 'NOT_ATTENDING') => void
 }
 
-export default function EventCard({ event, onRequestRide, onDelete, onRSVP }: EventCardProps) {
+export default function EventCard({ event, onDelete, onRSVP }: EventCardProps) {
   const { user } = useAuth()
   const [rsvpStatus, setRsvpStatus] = useState<'ATTENDING' | 'NOT_ATTENDING' | ''>('')
   const [isDeleting, setIsDeleting] = useState(false)
   const [isRsvping, setIsRsvping] = useState(false)
-  const [isOfferingRide, setIsOfferingRide] = useState(false)
-  const [offerError, setOfferError] = useState<string | null>(null)
-  const [offerSuccess, setOfferSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     console.log('EventCard mounted for event:', event.id)
@@ -82,51 +78,6 @@ export default function EventCard({ event, onRequestRide, onDelete, onRSVP }: Ev
     }
   }
 
-  const handleOfferRide = async () => {
-    console.log('Offer a Ride button clicked for event:', event.id)
-    setOfferError(null)
-    setOfferSuccess(null)
-    setIsOfferingRide(true)
-    try {
-      const capacityStr = prompt('Enter number of seats you can offer (minimum 1):')
-      if (!capacityStr) {
-        setIsOfferingRide(false)
-        return
-      }
-      const capacity = parseInt(capacityStr, 10)
-      if (isNaN(capacity) || capacity < 1) {
-        setOfferError('Invalid capacity')
-        setIsOfferingRide(false)
-        return
-      }
-      if (!user) {
-        setOfferError('Not authenticated')
-        setIsOfferingRide(false)
-        return
-      }
-      const idToken = await user.getIdToken()
-      console.log('Sending POST to /api/ride-offers with eventId:', event.id, 'capacity:', capacity)
-      const response = await fetch('/api/ride-offers', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({ eventId: event.id, capacity }),
-      })
-      if (!response.ok) {
-        const errorData = await response.json()
-        setOfferError(errorData.error || 'Failed to offer ride')
-      } else {
-        setOfferSuccess('Ride offer created!')
-      }
-    } catch (error: any) {
-      setOfferError(error.message || 'Failed to offer ride')
-    } finally {
-      setIsOfferingRide(false)
-    }
-  }
-
   const eventDate = new Date(event.date)
   const formattedDate = eventDate.toLocaleDateString('en-US', {
     month: 'short',
@@ -150,15 +101,6 @@ export default function EventCard({ event, onRequestRide, onDelete, onRSVP }: Ev
             className="text-red-600 hover:text-red-700 text-sm font-medium disabled:opacity-50"
           >
             {isDeleting ? 'Deleting...' : 'Delete'}
-          </button>
-        )}
-        {user?.role === 'ADMIN' && (
-          <button
-            onClick={handleOfferRide}
-            disabled={isOfferingRide}
-            className="ml-2 text-blue-600 hover:text-blue-700 text-sm font-medium disabled:opacity-50"
-          >
-            {isOfferingRide ? 'Offering...' : 'Offer a Ride'}
           </button>
         )}
       </div>
@@ -193,15 +135,7 @@ export default function EventCard({ event, onRequestRide, onDelete, onRSVP }: Ev
             </button>
           </div>
         )}
-        <button
-          onClick={onRequestRide}
-          className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-        >
-          Need a Ride?
-        </button>
       </div>
-      {offerError && <div className="text-red-600 text-sm mt-2">{offerError}</div>}
-      {offerSuccess && <div className="text-green-600 text-sm mt-2">{offerSuccess}</div>}
     </div>
   )
 } 

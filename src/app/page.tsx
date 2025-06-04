@@ -1,5 +1,5 @@
 'use client'
-import { useRef, useMemo, useState, useEffect } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Navigation from '@/components/Navigation'
 import Link from 'next/link'
@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation'
 import { auth } from '@/lib/firebase'
 import { useAuth } from '@/lib/auth'
 import EventCard from '@/components/EventCard'
+import AnimatedShapesBackground from '@/components/AnimatedShapesBackground'
 
 const WATERMARK = 'Rhody S.A.V.E.S, students, Actively, Volunteering, Engaging , In Service.'
 
@@ -83,6 +84,9 @@ interface Carpool {
     id: string
     name: string
   }[]
+  availableSeats: number
+  pickupLocation: string
+  pickupTime: string
 }
 
 interface Member {
@@ -173,10 +177,14 @@ export default function DashboardPage() {
   const [newMember, setNewMember] = useState({ name: '', email: '', role: 'MEMBER', password: '' })
   const [memberLoading, setMemberLoading] = useState(false)
   const [showToast, setShowToast] = useState(false)
+  const [isDark, setIsDark] = useState(false)
+  const [showOfferRideModal, setShowOfferRideModal] = useState(false)
+  const [offerRideForm, setOfferRideForm] = useState({ maxPassengers: '', pickupLocation: '', pickupTime: '' })
+  const [offerRideLoading, setOfferRideLoading] = useState(false)
+  const [showNeedRideModal, setShowNeedRideModal] = useState(false)
+  const [needRidePickup, setNeedRidePickup] = useState('')
+  const [needRideLoading, setNeedRideLoading] = useState(false)
   
-  // Memoize watermark lines
-  const watermarkLines = useMemo(() => getWatermarkLines(60), [])
-
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/auth/signin')
@@ -251,6 +259,18 @@ export default function DashboardPage() {
     }
   }, [error])
 
+  useEffect(() => {
+    const check = () => setIsDark(document.documentElement.classList.contains('dark'))
+    check()
+    window.addEventListener('storage', check)
+    const observer = new MutationObserver(check)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => {
+      window.removeEventListener('storage', check)
+      observer.disconnect()
+    }
+  }, [])
+
   async function handleRSVP(eventId: string, status: 'ATTENDING' | 'NOT_ATTENDING') {
     if (!user) {
       setError('Please sign in to RSVP')
@@ -282,58 +302,73 @@ export default function DashboardPage() {
   }
 
   async function handleNeedRide(eventId: string) {
+    setShowNeedRideModal(true)
+  }
+
+  async function submitNeedRide(eventId: string) {
     if (!user) {
       setError('Please sign in to request a ride')
       return
     }
-
+    setNeedRideLoading(true)
     try {
       const res = await fetch('/api/ride-requests', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await user.getIdToken()}` },
+        body: JSON.stringify({ eventId, pickupLocation: needRidePickup }),
       })
-
       if (!res.ok) {
-        throw new Error('Failed to request ride')
+        const data = await res.json()
+        setError(data.error || 'Failed to request ride')
+        return
       }
-
-      // Refresh carpools to show updated status
-      const carpoolsRes = await fetch('/api/carpools')
-      if (carpoolsRes.ok) {
-        const carpoolsData = await carpoolsRes.json()
-        setCarpools(carpoolsData)
+      // Refresh members to update 'Members Needing a Ride' list
+      const membersRes = await fetch('/api/members')
+      if (membersRes.ok) {
+        setMembers(await membersRes.json())
       }
+      setShowNeedRideModal(false)
+      setNeedRidePickup('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to request ride')
+    } finally {
+      setNeedRideLoading(false)
     }
   }
 
-  async function handleOfferRide(eventId: string, maxPassengers: number) {
+  async function handleOfferRide(eventId: string) {
     if (!user) {
       setError('Please sign in to offer a ride')
       return
     }
-
+    setOfferRideLoading(true)
     try {
       const res = await fetch('/api/carpools', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId, maxPassengers })
+        body: JSON.stringify({
+          eventId,
+          maxPassengers: parseInt(offerRideForm.maxPassengers),
+          pickupLocation: offerRideForm.pickupLocation,
+          pickupTime: offerRideForm.pickupTime,
+          driverId: user.uid,
+        }),
       })
-
       if (!res.ok) {
         throw new Error('Failed to offer ride')
       }
-
       // Refresh carpools to show new carpool
       const carpoolsRes = await fetch('/api/carpools')
       if (carpoolsRes.ok) {
         const carpoolsData = await carpoolsRes.json()
         setCarpools(carpoolsData)
       }
+      setShowOfferRideModal(false)
+      setOfferRideForm({ maxPassengers: '', pickupLocation: '', pickupTime: '' })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to offer ride')
+    } finally {
+      setOfferRideLoading(false)
     }
   }
 
@@ -602,6 +637,60 @@ export default function DashboardPage() {
     }
   }
 
+  // Add joinCarpool function
+  async function joinCarpool(carpoolId: string) {
+    if (!user) {
+      setError('Please sign in to join a carpool');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/carpools/${carpoolId}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'Failed to join carpool');
+        return;
+      }
+      // Refresh carpools
+      const carpoolsRes = await fetch('/api/carpools');
+      if (carpoolsRes.ok) {
+        setCarpools(await carpoolsRes.json());
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to join carpool');
+    }
+  }
+
+  // Add leaveCarpool function
+  async function leaveCarpool(carpoolId: string) {
+    if (!user) {
+      setError('Please sign in to leave a carpool');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/carpools/${carpoolId}/leave`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || 'Failed to leave carpool');
+        return;
+      }
+      // Refresh carpools
+      const carpoolsRes = await fetch('/api/carpools');
+      if (carpoolsRes.ok) {
+        setCarpools(await carpoolsRes.json());
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to leave carpool');
+    }
+  }
+
   if (authLoading) {
     return <div className="min-h-screen bg-blue-900 flex items-center justify-center text-white text-xl">Loading...</div>
   }
@@ -628,6 +717,14 @@ export default function DashboardPage() {
     // Instead, continue rendering the dashboard
   }
 
+  // Find nextEvent at the top of the render function so it can be used in both the carpool card and the Need a Ride modal
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const eventObjs = events
+    .map(ev => ({ ...ev, dateObj: new Date(ev.date) }))
+    .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
+  const nextEvent = eventObjs.find(ev => ev.dateObj >= today);
+
   return (
     <>
       {/* Toast notification */}
@@ -646,27 +743,9 @@ export default function DashboardPage() {
           </button>
         </div>
       )}
-      {/* Watermark background */}
-      <div
-        aria-hidden="true"
-        className="fixed inset-0 w-full h-full"
-        style={{
-          background: 'none',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'flex-start',
-          pointerEvents: 'none',
-          zIndex: 0,
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-        }}
-      >
-        {watermarkLines}
-      </div>
-      <div className="min-h-screen bg-blue-900/95 flex flex-col items-center pt-16 px-2 relative overflow-hidden">
+      {/* Animated 3D shapes background */}
+      <AnimatedShapesBackground />
+      <div className="min-h-screen" style={{ background: isDark ? 'linear-gradient(135deg, #101624 0%, #1a2233 100%)' : 'linear-gradient(135deg, #e3f1ff 0%, #f9fbff 100%)' }}>
         <Navigation />
         {/* Spinning Logo */}
         <motion.div
@@ -676,7 +755,7 @@ export default function DashboardPage() {
           animate={{ rotate: 360 }}
           transition={{ repeat: Infinity, duration: 60, ease: 'linear' }}
         >
-          <img src="/image.png" alt="SAVES Logo" style={{ width: 700, opacity: 0.07 }} />
+          <img src="/image.png" alt="SAVES Logo" style={{ width: 700, opacity: isDark ? 0.04 : 0.07, filter: isDark ? 'grayscale(0.7) brightness(0.7)' : 'none' }} />
         </motion.div>
         <main className="w-full flex flex-col items-center relative z-10">
           <Masonry
@@ -685,40 +764,55 @@ export default function DashboardPage() {
             columnClassName="masonry-column flex flex-col gap-6"
           >
             {/* Members Card */}
-            <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col max-h-[600px] min-h-[200px] w-full md:w-auto mb-2 overflow-y-auto scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-blue-50" style={{ minWidth: 0 }}>
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-xl font-semibold text-blue-900">Members</h2>
+            <div className="card flex flex-col w-full max-w-6xl mb-2" style={{ minWidth: 0 }}>
+              <div className="flex items-center justify-between flex-wrap mb-2">
+                <h2 className="text-xl font-semibold" style={{ color: '#229eff', letterSpacing: '0.01em', textShadow: '0 2px 8px #e3f1ff' }}>Members</h2>
                 {isAdmin && (
-                  <button onClick={() => setShowAddMember(true)} className="bg-blue-600 text-white px-3 py-1 rounded text-sm">+ Add Member</button>
+                  <button onClick={() => setShowAddMember(true)} className="btn-primary text-sm shadow-lg">+ Add Member</button>
                 )}
               </div>
               {/* Add Member Modal */}
               {showAddMember && (
-                <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-                  <form onSubmit={handleAddMember} className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl flex flex-col gap-3">
-                    <h3 className="text-lg font-bold mb-2">Add Member</h3>
-                    <input type="text" placeholder="Name" value={newMember.name} onChange={e => setNewMember(m => ({ ...m, name: e.target.value }))} className="border rounded px-2 py-1" required />
-                    <input type="email" placeholder="Email" value={newMember.email} onChange={e => setNewMember(m => ({ ...m, email: e.target.value }))} className="border rounded px-2 py-1" required />
-                    <input type="password" placeholder="Password" value={newMember.password} onChange={e => setNewMember(m => ({ ...m, password: e.target.value }))} className="border rounded px-2 py-1" required />
-                    <select value={newMember.role} onChange={e => setNewMember(m => ({ ...m, role: e.target.value }))} className="border rounded px-2 py-1">
-                      <option value="MEMBER">Member</option>
-                      <option value="ADMIN">Admin</option>
-                    </select>
-                    <div className="flex gap-2 mt-2">
-                      <button type="submit" disabled={memberLoading} className="bg-blue-600 text-white px-4 py-1 rounded">{memberLoading ? 'Adding...' : 'Add'}</button>
-                      <button type="button" onClick={() => setShowAddMember(false)} className="bg-gray-300 px-4 py-1 rounded">Cancel</button>
-                    </div>
-                  </form>
+                <div
+                  className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+                  style={{ alignItems: 'flex-start' }}
+                  onClick={() => setShowAddMember(false)}
+                >
+                  <div style={{ marginTop: '64px', width: '100%', display: 'flex', justifyContent: 'center' }}>
+                    <form
+                      onClick={e => e.stopPropagation()}
+                      onSubmit={handleAddMember}
+                      className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl flex flex-col gap-3"
+                      style={{ zIndex: 60 }}
+                    >
+                      <h3 className="text-lg font-bold mb-2">Add Member</h3>
+                      <input type="text" placeholder="Name" value={newMember.name} onChange={e => setNewMember(m => ({ ...m, name: e.target.value }))} className="border rounded px-2 py-1" required />
+                      <input type="email" placeholder="Email" value={newMember.email} onChange={e => setNewMember(m => ({ ...m, email: e.target.value }))} className="border rounded px-2 py-1" required />
+                      <input type="password" placeholder="Password" value={newMember.password} onChange={e => setNewMember(m => ({ ...m, password: e.target.value }))} className="border rounded px-2 py-1" required />
+                      <select value={newMember.role} onChange={e => setNewMember(m => ({ ...m, role: e.target.value }))} className="border rounded px-2 py-1">
+                        <option value="MEMBER">Member</option>
+                        <option value="ADMIN">Admin</option>
+                      </select>
+                      <div className="flex gap-2 mt-2">
+                        <button type="submit" disabled={memberLoading} className="bg-blue-600 text-white px-4 py-1 rounded">{memberLoading ? 'Adding...' : 'Add'}</button>
+                        <button type="button" onClick={() => setShowAddMember(false)} className="bg-gray-300 px-4 py-1 rounded">Cancel</button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               )}
               <ul>
                 {members.map(member => (
-                  <li key={member.id} className="mb-2 flex items-center justify-between">
-                    <span className="flex items-center">
+                  <li
+                    key={member.id}
+                    className="mb-2 flex flex-wrap items-center justify-between min-w-0"
+                    style={{ wordBreak: 'break-word' }}
+                  >
+                    <span className="flex items-center min-w-0 flex-wrap">
                       <span className="flex items-center mr-2">
-                        <FaUser color="#1d4ed8" size={20} />
+                        <FaUser color="#229eff" size={20} />
                       </span>
-                      <span className="font-medium text-blue-900">{member.name}</span>
+                      <span className="font-medium" style={{ color: '#229eff', wordBreak: 'break-all' }}>{member.name}</span>
                       <span className="ml-2 text-xs text-gray-500">{member.role}</span>
                       {member.rideStatus && (
                         <span className={`ml-2 text-xs flex items-center ${
@@ -731,7 +825,7 @@ export default function DashboardPage() {
                     </span>
                     {isAdmin && (
                       <div className="flex items-center gap-2">
-                        <select 
+                        <select
                           value={member.role}
                           onChange={async (e) => {
                             try {
@@ -742,7 +836,7 @@ export default function DashboardPage() {
                               })
                               if (res.ok) {
                                 const updatedMember = await res.json()
-                                setMembers(prev => prev.map(m => 
+                                setMembers(prev => prev.map(m =>
                                   m.id === member.id ? updatedMember : m
                                 ))
                               }
@@ -789,28 +883,191 @@ export default function DashboardPage() {
                 ))}
               </ul>
             </div>
+            {/* Active Carpools Card */}
+            <div className="card flex flex-col w-full max-w-4xl mb-2">
+              <h2 className="text-xl font-semibold mb-2" style={{ color: '#229eff', textShadow: '0 2px 8px #e3f1ff' }}>Active Carpools</h2>
+              {events.length > 0 ? (() => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const eventObjs = events
+                  .map(ev => ({ ...ev, dateObj: new Date(ev.date) }))
+                  .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
+                const nextEvent = eventObjs.find(ev => ev.dateObj >= today);
+                if (!nextEvent) return <div className="text-gray-500">No upcoming events.</div>;
+                
+                // Carpools for this event
+                const eventCarpools = carpools.filter(c => c.eventId === nextEvent.id);
+                // Members needing a ride (not in a carpool, rideStatus === 'NEEDS')
+                const carpoolPassengerIds = eventCarpools.flatMap(c => c.passengers.map(p => p.id)).concat(eventCarpools.map(c => c.driver.id));
+                const needsRide = members.filter(m => m.rideStatus === 'NEEDS' && !carpoolPassengerIds.includes(m.id));
+                
+                return (
+                  <>
+                    {/* Offer Ride Modal */}
+                    {showOfferRideModal && (
+                      <div
+                        className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+                        style={{ alignItems: 'flex-start' }}
+                        onClick={() => setShowOfferRideModal(false)}
+                      >
+                        <div style={{ marginTop: '64px', width: '100%', display: 'flex', justifyContent: 'center' }}>
+                          <form
+                            onClick={e => e.stopPropagation()}
+                            onSubmit={e => { e.preventDefault(); handleOfferRide(nextEvent.id); }}
+                            className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl flex flex-col gap-3"
+                            style={{ zIndex: 60 }}
+                          >
+                            <h3 className="text-lg font-bold mb-2">Offer a Ride</h3>
+                            <input
+                              type="number"
+                              min="1"
+                              placeholder="Number of seats"
+                              value={offerRideForm.maxPassengers}
+                              onChange={e => setOfferRideForm(f => ({ ...f, maxPassengers: e.target.value }))}
+                              className="border rounded px-2 py-1"
+                              required
+                            />
+                            <input
+                              type="text"
+                              placeholder="Pickup Location"
+                              value={offerRideForm.pickupLocation}
+                              onChange={e => setOfferRideForm(f => ({ ...f, pickupLocation: e.target.value }))}
+                              className="border rounded px-2 py-1"
+                              required
+                            />
+                            <input
+                              type="datetime-local"
+                              placeholder="Pickup Time"
+                              value={offerRideForm.pickupTime}
+                              onChange={e => setOfferRideForm(f => ({ ...f, pickupTime: e.target.value }))}
+                              className="border rounded px-2 py-1"
+                              required
+                            />
+                            <div className="flex gap-2 mt-2">
+                              <button
+                                type="submit"
+                                disabled={offerRideLoading || !offerRideForm.maxPassengers || !offerRideForm.pickupLocation || !offerRideForm.pickupTime}
+                                className="bg-blue-600 text-white px-4 py-1 rounded"
+                              >
+                                {offerRideLoading ? 'Offering...' : 'Offer Ride'}
+                              </button>
+                              <button type="button" onClick={() => setShowOfferRideModal(false)} className="bg-gray-300 px-4 py-1 rounded">Cancel</button>
+                            </div>
+                          </form>
+                        </div>
+                      </div>
+                    )}
+                    <div className="mb-2 text-sm text-gray-600">
+                      For event: <span className="font-semibold text-[#229eff]">{nextEvent.title}</span> ({nextEvent.date} {nextEvent.time})
+                    </div>
+                    {eventCarpools.length === 0 && (
+                      <div className="text-gray-500 mb-2">No carpools yet. Be the first to offer a ride!</div>
+                    )}
+                    <ul className="mb-4">
+                      {eventCarpools.map(carpool => {
+                        const isPassenger = carpool.passengers.some(p => p.id === user.uid);
+                        const isDriver = carpool.driver.id === user.uid;
+                        const seatsLeft = carpool.maxPassengers - carpool.passengers.length;
+                        return (
+                          <li key={carpool.id} className="mb-3 border-b pb-2">
+                            <div className="font-bold text-[#229eff]">Driver: {carpool.driver.name}</div>
+                            <div className="text-sm text-gray-700 mb-1">
+                              Passengers: {carpool.passengers.length > 0 ? carpool.passengers.map(p => p.name).join(', ') : <span className='italic text-gray-400'>None yet</span>}
+                            </div>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Seats: {carpool.maxPassengers} | Seats Left: {seatsLeft}
+                            </div>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Pickup: {carpool.pickupLocation} at {carpool.pickupTime ? new Date(carpool.pickupTime).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : 'N/A'}
+                            </div>
+                            {/* Join/Leave button logic */}
+                            {!isPassenger && !isDriver && seatsLeft > 0 && (
+                              <button
+                                className="btn-primary mt-1"
+                                onClick={() => joinCarpool(carpool.id)}
+                              >
+                                Join
+                              </button>
+                            )}
+                            {isPassenger && !isDriver && (
+                              <button
+                                className="btn-secondary mt-1"
+                                onClick={() => leaveCarpool(carpool.id)}
+                              >
+                                Leave
+                              </button>
+                            )}
+                            {isPassenger && <div className="text-green-600 text-xs mt-1">You are a passenger</div>}
+                            {isDriver && <div className="text-blue-600 text-xs mt-1">You are the driver</div>}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <div className="mb-2">
+                      <button
+                        className="btn-primary mr-2"
+                        onClick={() => setShowOfferRideModal(true)}
+                      >
+                        Offer a Ride
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        onClick={() => handleNeedRide(nextEvent.id)}
+                      >
+                        Need a Ride
+                      </button>
+                    </div>
+                    <div className="mt-2">
+                      <div className="font-semibold mb-1 text-[#229eff]">Members Needing a Ride:</div>
+                      {needsRide.length === 0 ? (
+                        <div className="text-gray-500 text-sm">No members currently need a ride.</div>
+                      ) : (
+                        <ul className="text-sm">
+                          {needsRide.map(m => (
+                            <li key={m.id} className="mb-1 flex items-center gap-2">
+                              <FaUser color="#229eff" size={16} />
+                              <span>{m.name} <span className="text-xs text-gray-500">({m.email})</span></span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </>
+                );
+              })() : <div className="text-gray-500">Loading events...</div>}
+            </div>
             {/* Events Card */}
-            <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col mb-2">
+            <div className="card flex flex-col mb-2">
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-xl font-semibold text-blue-900">Upcoming Events</h2>
+                <h2 className="text-xl font-semibold mb-2" style={{ color: '#229eff', textShadow: '0 2px 8px #e3f1ff' }}>Upcoming Events</h2>
                 {isAdmin && (
-                  <button onClick={() => setShowCreateEvent(true)} className="bg-blue-600 text-white px-3 py-1 rounded text-sm">+ Create Event</button>
+                  <button onClick={() => setShowCreateEvent(true)} className="btn-primary text-sm">+ Create Event</button>
                 )}
               </div>
               {/* Create Event Modal */}
               {showCreateEvent && (
-                <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-                  <form onSubmit={handleCreateEvent} className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl flex flex-col gap-3">
-                    <h3 className="text-lg font-bold mb-2">Create Event</h3>
-                    <input type="text" placeholder="Title" value={newEvent.title} onChange={e => setNewEvent(ev => ({ ...ev, title: e.target.value }))} className="border rounded px-2 py-1" required />
-                    <input type="date" value={newEvent.date} onChange={e => setNewEvent(ev => ({ ...ev, date: e.target.value }))} className="border rounded px-2 py-1" required />
-                    <input type="time" value={newEvent.time} onChange={e => setNewEvent(ev => ({ ...ev, time: e.target.value }))} className="border rounded px-2 py-1" required />
-                    <textarea placeholder="Description" value={newEvent.description} onChange={e => setNewEvent(ev => ({ ...ev, description: e.target.value }))} className="border rounded px-2 py-1" rows={2} required />
-                    <div className="flex gap-2 mt-2">
-                      <button type="submit" disabled={eventLoading} className="bg-blue-600 text-white px-4 py-1 rounded">{eventLoading ? 'Creating...' : 'Create'}</button>
-                      <button type="button" onClick={() => setShowCreateEvent(false)} className="bg-gray-300 px-4 py-1 rounded">Cancel</button>
-                    </div>
-                  </form>
+                <div
+                  className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+                  style={{ alignItems: 'flex-start' }}
+                >
+                  <div style={{ marginTop: '64px', width: '100%', display: 'flex', justifyContent: 'center' }}>
+                    <form
+                      onClick={e => e.stopPropagation()}
+                      onSubmit={handleCreateEvent}
+                      className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl flex flex-col gap-3"
+                      style={{ zIndex: 60 }}
+                    >
+                      <h3 className="text-lg font-bold mb-2">Create Event</h3>
+                      <input type="text" placeholder="Title" value={newEvent.title} onChange={e => setNewEvent(ev => ({ ...ev, title: e.target.value }))} className="border rounded px-2 py-1" required />
+                      <input type="date" value={newEvent.date} onChange={e => setNewEvent(ev => ({ ...ev, date: e.target.value }))} className="border rounded px-2 py-1" required />
+                      <input type="time" value={newEvent.time} onChange={e => setNewEvent(ev => ({ ...ev, time: e.target.value }))} className="border rounded px-2 py-1" required />
+                      <textarea placeholder="Description" value={newEvent.description} onChange={e => setNewEvent(ev => ({ ...ev, description: e.target.value }))} className="border rounded px-2 py-1" rows={2} required />
+                      <div className="flex gap-2 mt-2">
+                        <button type="submit" disabled={eventLoading} className="btn-primary px-4 py-1 rounded">{eventLoading ? 'Creating...' : 'Create'}</button>
+                        <button type="button" onClick={() => setShowCreateEvent(false)} className="btn-secondary px-4 py-1 rounded">Cancel</button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               )}
               <ul>
@@ -820,15 +1077,14 @@ export default function DashboardPage() {
                       event={event}
                       onDelete={isAdmin ? () => handleDeleteEvent(event.id) : undefined}
                       onRSVP={user ? (status) => handleRSVP(event.id, status) : undefined}
-                      onRequestRide={() => handleNeedRide(event.id)}
                     />
                   </li>
                 ))}
               </ul>
             </div>
             {/* Polls Card */}
-            <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col mb-2">
-              <h2 className="text-xl font-semibold mb-2 text-blue-900">Active Polls</h2>
+            <div className="card flex flex-col mb-2">
+              <h2 className="text-xl font-semibold mb-2" style={{ color: '#229eff', textShadow: '0 2px 8px #e3f1ff' }}>Active Polls</h2>
               {polls.map(poll => {
                 // Check expiration
                 const isExpired = poll.expiresAt && new Date(poll.expiresAt) < new Date()
@@ -987,13 +1243,13 @@ export default function DashboardPage() {
               )}
             </div>
             {/* Announcements Card */}
-            <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col mb-2">
-              <h2 className="text-xl font-semibold mb-2 text-blue-900">Announcements</h2>
+            <div className="card flex flex-col mb-2">
+              <h2 className="text-xl font-semibold mb-2" style={{ color: '#229eff', textShadow: '0 2px 8px #e3f1ff' }}>Announcements</h2>
               {announcements.length === 0 && <div className="text-gray-500">No announcements yet.</div>}
               <ul>
                 {announcements.map(a => (
                   <li key={a.id} className="mb-4 border-b pb-2">
-                    <div className="font-bold text-blue-900">{a.title}</div>
+                    <div className="font-bold" style={{ color: '#229eff' }}>{a.title}</div>
                     <div className="text-gray-700 text-sm mb-1">{a.content}</div>
                     <div className="text-xs text-gray-400">By {a.author} • {formatDate(a.createdAt)} {formatTime(a.createdAt)}</div>
                     {isAdmin && (
@@ -1035,8 +1291,8 @@ export default function DashboardPage() {
               )}
             </div>
             {/* Weather Card */}
-            <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col mb-2 items-center">
-              <h2 className="text-xl font-semibold mb-2 text-blue-900">Weather</h2>
+            <div className="card flex flex-col mb-2 items-center">
+              <h2 className="text-xl font-semibold mb-2" style={{ color: '#229eff', textShadow: '0 2px 8px #e3f1ff' }}>Weather</h2>
               {weatherLoading ? (
                 <div className="text-gray-500">Loading...</div>
               ) : weatherError ? (
@@ -1044,15 +1300,15 @@ export default function DashboardPage() {
               ) : weather ? (
                 <div className="flex flex-col items-center">
                   <img src={weather.icon} alt={weather.condition} className="w-16 h-16 mb-2" />
-                  <div className="text-2xl font-bold text-blue-900">{weather.temperature}&deg;F</div>
-                  <div className="text-blue-700">{weather.condition}</div>
+                  <div className="text-2xl font-bold" style={{ color: '#229eff' }}>{weather.temperature}&deg;F</div>
+                  <div className="text-[#229eff]">{weather.condition}</div>
                 </div>
               ) : null}
             </div>
             {/* Quick Links Card */}
-            <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col mb-2">
-              <h2 className="text-xl font-semibold mb-2 text-blue-900">Quick Links</h2>
-              <ul className="list-disc pl-5 text-blue-700">
+            <div className="card flex flex-col mb-2">
+              <h2 className="text-xl font-semibold mb-2" style={{ color: '#229eff', textShadow: '0 2px 8px #e3f1ff' }}>Quick Links</h2>
+              <ul className="list-disc pl-5 text-[#229eff]">
                 {quickLinks.map(link => (
                   <li key={link.id} className="mb-1 flex items-center gap-2">
                     {editingQuickLink?.id === link.id ? (
@@ -1076,7 +1332,7 @@ export default function DashboardPage() {
                       </div>
                     ) : (
                       <>
-                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="hover:underline">{link.label}</a>
+                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: '#229eff' }}>{link.label}</a>
                         {isAdmin && (
                           <>
                             <button onClick={() => setEditingQuickLink(link)} className="text-blue-600 text-xs">Edit</button>
@@ -1109,15 +1365,15 @@ export default function DashboardPage() {
               )}
             </div>
             {/* Contact Card */}
-            <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col mb-2">
-              <h2 className="text-xl font-semibold mb-2 text-blue-900">Contact</h2>
+            <div className="card flex flex-col mb-2">
+              <h2 className="text-xl font-semibold mb-2" style={{ color: '#229eff', textShadow: '0 2px 8px #e3f1ff' }}>Contact</h2>
               <div className="mb-2">
-                <div className="text-blue-700 font-medium">Email:</div>
-                <a href="mailto:saves@etal.uri.edu" className="text-blue-900 hover:underline">saves@etal.uri.edu</a>
+                <div className="text-[#229eff] font-medium">Email:</div>
+                <a href="mailto:saves@etal.uri.edu" className="text-[#229eff] hover:underline">saves@etal.uri.edu</a>
               </div>
               <div className="mb-2">
-                <div className="text-blue-700 font-medium">Instagram:</div>
-                <a href="https://instagram.com/urisa.ves" target="_blank" rel="noopener noreferrer" className="text-blue-900 hover:underline">@urisa.ves</a>
+                <div className="text-[#229eff] font-medium">Instagram:</div>
+                <a href="https://instagram.com/urisa.ves" target="_blank" rel="noopener noreferrer" className="text-[#229eff] hover:underline">@urisa.ves</a>
               </div>
               <form onSubmit={handleContactSubmit} className="space-y-2 mt-2">
                 <input
@@ -1151,12 +1407,43 @@ export default function DashboardPage() {
                 >
                   {contactLoading ? 'Sending...' : 'Send'}
                 </button>
-                {contactStatus && <div className="text-xs mt-1 text-center text-blue-700">{contactStatus}</div>}
+                {contactStatus && <div className="text-xs mt-1 text-center text-[#229eff]">{contactStatus}</div>}
               </form>
             </div>
           </Masonry>
         </main>
       </div>
+      {/* Need a Ride Modal */}
+      {showNeedRideModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" style={{ alignItems: 'flex-start' }} onClick={() => setShowNeedRideModal(false)}>
+          <div style={{ marginTop: '64px', width: '100%', display: 'flex', justifyContent: 'center' }}>
+            <form
+              onClick={e => e.stopPropagation()}
+              onSubmit={e => { e.preventDefault(); if (nextEvent) submitNeedRide(nextEvent.id); }}
+              className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl flex flex-col gap-3"
+              style={{ zIndex: 60 }}
+            >
+              <h3 className="text-lg font-bold mb-2">Request a Ride</h3>
+              <input
+                type="text"
+                placeholder="Pickup Location"
+                value={needRidePickup}
+                onChange={e => setNeedRidePickup(e.target.value)}
+                className="border rounded px-2 py-1"
+                required={!nextEvent ? false : true}
+                disabled={!nextEvent}
+              />
+              <div className="flex gap-2 mt-2">
+                <button type="submit" disabled={needRideLoading || !needRidePickup || !nextEvent} className="bg-blue-600 text-white px-4 py-1 rounded">
+                  {needRideLoading ? 'Requesting...' : 'Request Ride'}
+                </button>
+                <button type="button" onClick={() => setShowNeedRideModal(false)} className="bg-gray-300 px-4 py-1 rounded">Cancel</button>
+              </div>
+              {!nextEvent && <div className="text-red-600 text-xs mt-2">No upcoming event available.</div>}
+            </form>
+          </div>
+        </div>
+      )}
     </>
   )
 }

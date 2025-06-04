@@ -5,11 +5,26 @@
 :root {
   --foreground-rgb: 17, 24, 39;
   --background-rgb: 249, 250, 251;
+  --primary-blue: 34, 158, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 230, 240, 255;
+    --background-rgb: 18, 24, 38;
+    --primary-blue: 34, 158, 255;
+  }
 }
 
 body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
+  transition: background 0.3s, color 0.3s;
+}
+
+.dark body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(135deg, #101624 0%, #1a2233 100%);
 }
 
 /* Custom scrollbar */
@@ -32,19 +47,60 @@ body {
 
 @layer components {
   .btn-primary {
-    @apply px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors;
+    @apply px-4 py-2 rounded-md text-white shadow-lg transition-transform transition-shadow transition-colors;
+    background-color: rgb(var(--primary-blue));
+    box-shadow: 0 4px 16px 0 rgba(34,158,255,0.15);
   }
-  
+  .btn-primary:hover, .btn-primary:focus {
+    background-color: #1a7fd1;
+    transform: scale(1.045);
+    box-shadow: 0 6px 24px 0 #229eff44, 0 1.5px 8px 0 #229eff22;
+  }
+  .btn-primary:active {
+    transform: scale(0.98);
+    box-shadow: 0 2px 8px 0 #229eff33;
+  }
   .btn-secondary {
-    @apply px-4 py-2 bg-secondary text-white rounded-md hover:bg-secondary/90 transition-colors;
+    @apply px-4 py-2 rounded-md text-white transition-transform transition-shadow transition-colors;
+    background-color: #1a7fd1;
   }
-
+  .btn-secondary:hover, .btn-secondary:focus {
+    background-color: #229eff;
+    transform: scale(1.045);
+    box-shadow: 0 6px 24px 0 #229eff44, 0 1.5px 8px 0 #229eff22;
+  }
+  .btn-secondary:active {
+    transform: scale(0.98);
+    box-shadow: 0 2px 8px 0 #229eff33;
+  }
   .input-field {
     @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
+    transition: background 0.3s, color 0.3s;
   }
-
   .card {
-    @apply bg-white rounded-lg shadow-md p-6;
+    @apply bg-white rounded-xl shadow-lg p-6 transition-transform transition-shadow;
+    border: 1.5px solid #e3f1ff;
+    box-shadow: 0 4px 24px 0 rgba(34,158,255,0.08);
+    transition: background 0.3s, color 0.3s, border 0.3s;
+  }
+  .card:hover, .card:focus-within {
+    transform: translateY(-4px) scale(1.025);
+    box-shadow: 0 12px 36px 0 #229eff33, 0 2px 12px 0 #229eff22;
+    border-color: #229eff;
+  }
+  .dark .card {
+    @apply bg-[#1a2233] text-[#e6f0ff] border-[#223355];
+    box-shadow: 0 4px 24px 0 #229eff22;
+  }
+  .dark .btn-primary, .dark .btn-secondary {
+    @apply text-white;
+    background-color: #229eff;
+    box-shadow: 0 4px 16px 0 #229eff33;
+  }
+  .dark .btn-primary:hover, .dark .btn-primary:focus,
+  .dark .btn-secondary:hover, .dark .btn-secondary:focus {
+    background-color: #1a7fd1;
+    box-shadow: 0 8px 32px 0 #229eff55;
   }
 }
 
