@@ -1,8 +1,8 @@
 interface Volunteer {
-  id: number | string
-  name: string
-  role: string
-  description?: string
+  id: number | string;
+  name: string;
+  role: string;
+  description?: string;
 }
 
 export default function VolunteerCard({ volunteer }: { volunteer: Volunteer }) {
@@ -12,5 +12,5 @@ export default function VolunteerCard({ volunteer }: { volunteer: Volunteer }) {
       <p className="text-gray-600 mb-2">Role: {volunteer.role}</p>
       <p className="text-sm text-gray-500">{volunteer.description || ''}</p>
     </div>
-  )
+  );
 } 
