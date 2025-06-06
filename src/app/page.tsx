@@ -187,7 +187,8 @@ export default function DashboardPage() {
   const { data: carpools = [], error: carpoolsError } = useSWR<Carpool[]>('/api/carpools', fetcher)
   const { data: members = [], error: membersError } = useSWR<Member[]>('/api/members', fetcher)
   const { data: polls = [], error: pollsError } = useSWR<Poll[]>('/api/polls', fetcher)
-  const { data: announcements, error: announcementsError, isLoading: announcementsLoading } = useSWR<Announcement[]>('/api/announcements', fetcher)
+  const { data: announcementsData, error: announcementsError, isLoading: announcementsLoading } = useSWR<Announcement[]>('/api/announcements', fetcher)
+  const announcements = Array.isArray(announcementsData) ? announcementsData : []
   const { data: quickLinks = [], error: quickLinksError } = useSWR<QuickLink[]>('/api/quick-links', fetcher)
 
   // Convert RSVPs array to a map for easy lookup
