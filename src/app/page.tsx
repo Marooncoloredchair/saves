@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useRef, useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Navigation from '@/components/Navigation'
@@ -11,6 +11,7 @@ import { auth } from '@/lib/firebase'
 import { useAuth } from '@/lib/auth'
 import EventCard from '@/components/EventCard'
 import AnimatedShapesBackground from '@/components/AnimatedShapesBackground'
+import useSWR, { mutate } from 'swr'
 
 const WATERMARK = 'Rhody S.A.V.E.S, students, Actively, Volunteering, Engaging , In Service.'
 
@@ -145,21 +146,16 @@ async function authFetch(input: RequestInfo, init: RequestInit = {}) {
   });
 }
 
+const fetcher = (url: string) => fetch(url).then(res => res.json())
+
 export default function DashboardPage() {
   const logoRef = useRef<HTMLDivElement>(null)
   const { user, loading: authLoading } = useAuth()
   const [isAdmin, setIsAdmin] = useState(false)
   const router = useRouter()
-  const [events, setEvents] = useState<Event[]>([])
-  const [rsvps, setRsvps] = useState<Record<string, RSVP>>({})
-  const [carpools, setCarpools] = useState<Carpool[]>([])
-  const [members, setMembers] = useState<Member[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [polls, setPolls] = useState<Poll[]>([])
   const [newPoll, setNewPoll] = useState({ question: '', options: ['', ''], expiresAt: '', multipleChoice: false })
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, number[]>>({}) // pollId -> selected option indices
-  const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, number[]>>({})
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' })
   const [weather, setWeather] = useState<Weather | null>(null)
   const [weatherLoading, setWeatherLoading] = useState(true)
@@ -167,7 +163,6 @@ export default function DashboardPage() {
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' })
   const [contactStatus, setContactStatus] = useState<string | null>(null)
   const [contactLoading, setContactLoading] = useState(false)
-  const [quickLinks, setQuickLinks] = useState<QuickLink[]>([])
   const [newQuickLink, setNewQuickLink] = useState({ label: '', url: '' })
   const [editingQuickLink, setEditingQuickLink] = useState<QuickLink | null>(null)
   const [showCreateEvent, setShowCreateEvent] = useState(false)
@@ -184,64 +179,29 @@ export default function DashboardPage() {
   const [showNeedRideModal, setShowNeedRideModal] = useState(false)
   const [needRidePickup, setNeedRidePickup] = useState('')
   const [needRideLoading, setNeedRideLoading] = useState(false)
-  
+
+  // Use SWR for data fetching
+  const { data: events = [], error: eventsError } = useSWR<Event[]>('/api/events', fetcher)
+  const { data: rsvpsData = [], error: rsvpsError } = useSWR<RSVP[]>('/api/rsvps', fetcher)
+  const { data: carpools = [], error: carpoolsError } = useSWR<Carpool[]>('/api/carpools', fetcher)
+  const { data: members = [], error: membersError } = useSWR<Member[]>('/api/members', fetcher)
+  const { data: polls = [], error: pollsError } = useSWR<Poll[]>('/api/polls', fetcher)
+  const { data: announcements, error: announcementsError, isLoading: announcementsLoading } = useSWR<Announcement[]>('/api/announcements', fetcher)
+  const { data: quickLinks = [], error: quickLinksError } = useSWR<QuickLink[]>('/api/quick-links', fetcher)
+
+  // Convert RSVPs array to a map for easy lookup
+  const rsvps = rsvpsData.reduce((acc: Record<string, RSVP>, rsvp: RSVP) => {
+    acc[rsvp.eventId] = rsvp
+    return acc
+  }, {})
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/auth/signin')
     } else if (user) {
-      // Check if the user is an admin based on email
       setIsAdmin(user.email === 'admin@saves.org')
     }
   }, [user, authLoading, router])
-
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const [eventsRes, rsvpsRes, carpoolsRes, membersRes, pollsRes, announcementsRes, quickLinksRes] = await Promise.all([
-          fetch('/api/events'),
-          fetch('/api/rsvps'),
-          fetch('/api/carpools'),
-          fetch('/api/members'),
-          fetch('/api/polls'),
-          fetch('/api/announcements'),
-          fetch('/api/quick-links')
-        ])
-        
-        if (!eventsRes.ok || !rsvpsRes.ok || !carpoolsRes.ok || !membersRes.ok || !pollsRes.ok || !announcementsRes.ok || !quickLinksRes.ok) {
-          throw new Error('Failed to fetch data')
-        }
-
-        const [eventsData, rsvpsData, carpoolsData, membersData, pollsData, announcementsData, quickLinksData] = await Promise.all([
-          eventsRes.json(),
-          rsvpsRes.json(),
-          carpoolsRes.json(),
-          membersRes.json(),
-          pollsRes.json(),
-          announcementsRes.json(),
-          quickLinksRes.json()
-        ])
-        
-        setEvents(eventsData)
-        // Convert RSVPs array to a map for easy lookup
-        const rsvpMap = rsvpsData.reduce((acc: Record<string, RSVP>, rsvp: RSVP) => {
-          acc[rsvp.eventId] = rsvp
-          return acc
-        }, {})
-        setRsvps(rsvpMap)
-        setCarpools(carpoolsData)
-        setMembers(membersData)
-        setPolls(pollsData)
-        setAnnouncements(announcementsData)
-        setQuickLinks(quickLinksData)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
 
   useEffect(() => {
     fetch('/api/weather')
@@ -270,6 +230,30 @@ export default function DashboardPage() {
       observer.disconnect()
     }
   }, [])
+
+  // Check for any errors
+  useEffect(() => {
+    const errors = [
+      eventsError,
+      rsvpsError,
+      carpoolsError,
+      membersError,
+      pollsError,
+      announcementsError,
+      quickLinksError
+    ].filter(Boolean)
+
+    if (errors.length > 0) {
+      setError('Failed to fetch some data. Please refresh the page.')
+    }
+  }, [eventsError, rsvpsError, carpoolsError, membersError, pollsError, announcementsError, quickLinksError])
+
+  // Add debugging
+  useEffect(() => {
+    console.log('Announcements data:', announcements)
+    console.log('Announcements type:', typeof announcements)
+    console.log('Is array?', Array.isArray(announcements))
+  }, [announcements])
 
   async function handleRSVP(eventId: string, status: 'ATTENDING' | 'NOT_ATTENDING') {
     if (!user) {
@@ -450,16 +434,34 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newAnnouncement.title,
-          content: newAnnouncement.content,
-          author: user.displayName || 'Admin',
+          content: newAnnouncement.content
         }),
       })
       if (!res.ok) throw new Error('Failed to post announcement')
-      const announcementsRes = await fetch('/api/announcements')
-      if (announcementsRes.ok) setAnnouncements(await announcementsRes.json())
+      
+      // Invalidate and revalidate the announcements data
+      await mutate('/api/announcements')
       setNewAnnouncement({ title: '', content: '' })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to post announcement')
+    }
+  }
+
+  async function handleDeleteAnnouncement(id: string) {
+    if (!user || !isAdmin) return
+    try {
+      const res = await authFetch(`/api/announcements/${id}`, {
+        method: 'DELETE'
+      })
+      if (!res.ok) {
+        const errorData = await res.json()
+        setError(errorData.error || 'Failed to delete announcement')
+        throw new Error('Failed to delete announcement')
+      }
+      // Update UI immediately
+      await mutate('/api/announcements')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete announcement')
     }
   }
 
@@ -558,8 +560,7 @@ export default function DashboardPage() {
         body: JSON.stringify(newEvent),
       })
       if (!res.ok) throw new Error('Failed to create event')
-      const eventsRes = await fetch('/api/events')
-      if (eventsRes.ok) setEvents(await eventsRes.json())
+      await mutate('/api/events')
       setShowCreateEvent(false)
       setNewEvent({ title: '', date: '', time: '', description: '' })
     } catch (err) {
@@ -613,27 +614,6 @@ export default function DashboardPage() {
       if (eventsRes.ok) setEvents(await eventsRes.json())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete event')
-    }
-  }
-
-  async function handleDeleteAnnouncement(id: string) {
-    if (!user || !isAdmin) return
-    try {
-      const idToken = await user.getIdToken()
-      const res = await fetch(`/api/announcements/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${idToken}` },
-      })
-      if (!res.ok) {
-        const errorData = await res.json()
-        setError(errorData.error || 'Failed to delete announcement')
-        throw new Error('Failed to delete announcement')
-      }
-      // Refresh announcements
-      const announcementsRes = await fetch('/api/announcements')
-      if (announcementsRes.ok) setAnnouncements(await announcementsRes.json())
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete announcement')
     }
   }
 
@@ -698,14 +678,6 @@ export default function DashboardPage() {
     return null // or a loading spinner
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-blue-900 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
-    )
-  }
-
   if (error) {
     // Remove the full error overlay, just return null here
     // Error will be shown as toast instead
@@ -729,7 +701,7 @@ export default function DashboardPage() {
     <>
       {/* Toast notification */}
       {showToast && error && (
-        <div
+      <div
           className="fixed bottom-6 right-6 z-50 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-fade-in-out"
           style={{ minWidth: 220, maxWidth: 350, transition: 'opacity 0.3s' }}
         >
@@ -741,7 +713,7 @@ export default function DashboardPage() {
           >
             ×
           </button>
-        </div>
+      </div>
       )}
       {/* Animated 3D shapes background */}
       <AnimatedShapesBackground />
@@ -785,19 +757,19 @@ export default function DashboardPage() {
                       className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl flex flex-col gap-3"
                       style={{ zIndex: 60 }}
                     >
-                      <h3 className="text-lg font-bold mb-2">Add Member</h3>
-                      <input type="text" placeholder="Name" value={newMember.name} onChange={e => setNewMember(m => ({ ...m, name: e.target.value }))} className="border rounded px-2 py-1" required />
-                      <input type="email" placeholder="Email" value={newMember.email} onChange={e => setNewMember(m => ({ ...m, email: e.target.value }))} className="border rounded px-2 py-1" required />
-                      <input type="password" placeholder="Password" value={newMember.password} onChange={e => setNewMember(m => ({ ...m, password: e.target.value }))} className="border rounded px-2 py-1" required />
-                      <select value={newMember.role} onChange={e => setNewMember(m => ({ ...m, role: e.target.value }))} className="border rounded px-2 py-1">
-                        <option value="MEMBER">Member</option>
-                        <option value="ADMIN">Admin</option>
-                      </select>
-                      <div className="flex gap-2 mt-2">
-                        <button type="submit" disabled={memberLoading} className="bg-blue-600 text-white px-4 py-1 rounded">{memberLoading ? 'Adding...' : 'Add'}</button>
-                        <button type="button" onClick={() => setShowAddMember(false)} className="bg-gray-300 px-4 py-1 rounded">Cancel</button>
-                      </div>
-                    </form>
+                    <h3 className="text-lg font-bold mb-2">Add Member</h3>
+                    <input type="text" placeholder="Name" value={newMember.name} onChange={e => setNewMember(m => ({ ...m, name: e.target.value }))} className="border rounded px-2 py-1" required />
+                    <input type="email" placeholder="Email" value={newMember.email} onChange={e => setNewMember(m => ({ ...m, email: e.target.value }))} className="border rounded px-2 py-1" required />
+                    <input type="password" placeholder="Password" value={newMember.password} onChange={e => setNewMember(m => ({ ...m, password: e.target.value }))} className="border rounded px-2 py-1" required />
+                    <select value={newMember.role} onChange={e => setNewMember(m => ({ ...m, role: e.target.value }))} className="border rounded px-2 py-1">
+                      <option value="MEMBER">Member</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                    <div className="flex gap-2 mt-2">
+                      <button type="submit" disabled={memberLoading} className="bg-blue-600 text-white px-4 py-1 rounded">{memberLoading ? 'Adding...' : 'Add'}</button>
+                      <button type="button" onClick={() => setShowAddMember(false)} className="bg-gray-300 px-4 py-1 rounded">Cancel</button>
+                    </div>
+                  </form>
                   </div>
                 </div>
               )}
@@ -825,30 +797,30 @@ export default function DashboardPage() {
                     </span>
                     {isAdmin && (
                       <div className="flex items-center gap-2">
-                        <select
-                          value={member.role}
-                          onChange={async (e) => {
-                            try {
-                              const res = await fetch(`/api/members/${member.id}`, {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ role: e.target.value })
-                              })
-                              if (res.ok) {
-                                const updatedMember = await res.json()
-                                setMembers(prev => prev.map(m =>
-                                  m.id === member.id ? updatedMember : m
-                                ))
-                              }
-                            } catch (err) {
-                              setError('Failed to update member role')
+                      <select 
+                        value={member.role}
+                        onChange={async (e) => {
+                          try {
+                            const res = await fetch(`/api/members/${member.id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ role: e.target.value })
+                            })
+                            if (res.ok) {
+                              const updatedMember = await res.json()
+                              setMembers(prev => prev.map(m => 
+                                m.id === member.id ? updatedMember : m
+                              ))
                             }
-                          }}
-                          className="ml-2 border rounded px-1 text-xs"
-                        >
-                          <option value="ADMIN">Admin</option>
-                          <option value="MEMBER">Member</option>
-                        </select>
+                          } catch (err) {
+                            setError('Failed to update member role')
+                          }
+                        }}
+                        className="ml-2 border rounded px-1 text-xs"
+                      >
+                        <option value="ADMIN">Admin</option>
+                        <option value="MEMBER">Member</option>
+                      </select>
                         {/* Only show delete button if not head admin and not yourself */}
                         {member.email !== 'admin@saves.org' && member.id !== user.uid ? (
                           <button
@@ -943,7 +915,7 @@ export default function DashboardPage() {
                               className="border rounded px-2 py-1"
                               required
                             />
-                            <div className="flex gap-2 mt-2">
+                    <div className="flex gap-2 mt-2">
                               <button
                                 type="submit"
                                 disabled={offerRideLoading || !offerRideForm.maxPassengers || !offerRideForm.pickupLocation || !offerRideForm.pickupTime}
@@ -952,14 +924,14 @@ export default function DashboardPage() {
                                 {offerRideLoading ? 'Offering...' : 'Offer Ride'}
                               </button>
                               <button type="button" onClick={() => setShowOfferRideModal(false)} className="bg-gray-300 px-4 py-1 rounded">Cancel</button>
-                            </div>
-                          </form>
+                    </div>
+                  </form>
                         </div>
-                      </div>
-                    )}
+                </div>
+              )}
                     <div className="mb-2 text-sm text-gray-600">
                       For event: <span className="font-semibold text-[#229eff]">{nextEvent.title}</span> ({nextEvent.date} {nextEvent.time})
-                    </div>
+                      </div>
                     {eventCarpools.length === 0 && (
                       <div className="text-gray-500 mb-2">No carpools yet. Be the first to offer a ride!</div>
                     )}
@@ -973,7 +945,7 @@ export default function DashboardPage() {
                             <div className="font-bold text-[#229eff]">Driver: {carpool.driver.name}</div>
                             <div className="text-sm text-gray-700 mb-1">
                               Passengers: {carpool.passengers.length > 0 ? carpool.passengers.map(p => p.name).join(', ') : <span className='italic text-gray-400'>None yet</span>}
-                            </div>
+                        </div>
                             <div className="text-xs text-gray-500 mb-1">
                               Seats: {carpool.maxPassengers} | Seats Left: {seatsLeft}
                             </div>
@@ -982,20 +954,20 @@ export default function DashboardPage() {
                             </div>
                             {/* Join/Leave button logic */}
                             {!isPassenger && !isDriver && seatsLeft > 0 && (
-                              <button
+                          <button 
                                 className="btn-primary mt-1"
                                 onClick={() => joinCarpool(carpool.id)}
                               >
                                 Join
-                              </button>
+                          </button>
                             )}
                             {isPassenger && !isDriver && (
-                              <button
+                          <button 
                                 className="btn-secondary mt-1"
                                 onClick={() => leaveCarpool(carpool.id)}
                               >
                                 Leave
-                              </button>
+                          </button>
                             )}
                             {isPassenger && <div className="text-green-600 text-xs mt-1">You are a passenger</div>}
                             {isDriver && <div className="text-blue-600 text-xs mt-1">You are the driver</div>}
@@ -1004,19 +976,19 @@ export default function DashboardPage() {
                       })}
                     </ul>
                     <div className="mb-2">
-                      <button
+                          <button 
                         className="btn-primary mr-2"
                         onClick={() => setShowOfferRideModal(true)}
-                      >
+                          >
                         Offer a Ride
-                      </button>
-                      <button
+                          </button>
+                          <button 
                         className="btn-secondary"
                         onClick={() => handleNeedRide(nextEvent.id)}
-                      >
-                        Need a Ride
-                      </button>
-                    </div>
+                          >
+                            Need a Ride
+                          </button>
+                        </div>
                     <div className="mt-2">
                       <div className="font-semibold mb-1 text-[#229eff]">Members Needing a Ride:</div>
                       {needsRide.length === 0 ? (
@@ -1027,11 +999,11 @@ export default function DashboardPage() {
                             <li key={m.id} className="mb-1 flex items-center gap-2">
                               <FaUser color="#229eff" size={16} />
                               <span>{m.name} <span className="text-xs text-gray-500">({m.email})</span></span>
-                            </li>
-                          ))}
-                        </ul>
+                                </li>
+                              ))}
+                            </ul>
                       )}
-                    </div>
+                          </div>
                   </>
                 );
               })() : <div className="text-gray-500">Loading events...</div>}
@@ -1042,8 +1014,8 @@ export default function DashboardPage() {
                 <h2 className="text-xl font-semibold mb-2" style={{ color: '#229eff', textShadow: '0 2px 8px #e3f1ff' }}>Upcoming Events</h2>
                 {isAdmin && (
                   <button onClick={() => setShowCreateEvent(true)} className="btn-primary text-sm">+ Create Event</button>
-                )}
-              </div>
+                        )}
+                      </div>
               {/* Create Event Modal */}
               {showCreateEvent && (
                 <div
@@ -1078,7 +1050,7 @@ export default function DashboardPage() {
                       onDelete={isAdmin ? () => handleDeleteEvent(event.id) : undefined}
                       onRSVP={user ? (status) => handleRSVP(event.id, status) : undefined}
                     />
-                  </li>
+                    </li>
                 ))}
               </ul>
             </div>
@@ -1143,19 +1115,19 @@ export default function DashboardPage() {
                           const isWinning = optionVotes[idx] === Math.max(...optionVotes) && totalVotes > 0;
                           const isUserVote = userVotes[0] === idx;
                           return (
-                            <button
-                              key={idx}
-                              onClick={() => handlePollVote(poll, [idx])}
-                              className={`px-4 py-1 rounded transition ${
+                          <button
+                            key={idx}
+                            onClick={() => handlePollVote(poll, [idx])}
+                            className={`px-4 py-1 rounded transition ${
                                 isUserVote
-                                  ? 'bg-blue-600 text-white'
+                                ? 'bg-blue-600 text-white'
                                   : isWinning
                                   ? 'bg-green-600 text-white'
-                                  : 'bg-blue-600 text-white hover:bg-blue-700'
-                              }`}
-                            >
-                              Vote for {opt}
-                            </button>
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }`}
+                          >
+                            Vote for {opt}
+                          </button>
                           );
                         })
                       )}
@@ -1245,24 +1217,33 @@ export default function DashboardPage() {
             {/* Announcements Card */}
             <div className="card flex flex-col mb-2">
               <h2 className="text-xl font-semibold mb-2" style={{ color: '#229eff', textShadow: '0 2px 8px #e3f1ff' }}>Announcements</h2>
-              {announcements.length === 0 && <div className="text-gray-500">No announcements yet.</div>}
-              <ul>
-                {announcements.map(a => (
-                  <li key={a.id} className="mb-4 border-b pb-2">
-                    <div className="font-bold" style={{ color: '#229eff' }}>{a.title}</div>
-                    <div className="text-gray-700 text-sm mb-1">{a.content}</div>
-                    <div className="text-xs text-gray-400">By {a.author} • {formatDate(a.createdAt)} {formatTime(a.createdAt)}</div>
-                    {isAdmin && (
-                      <button
-                        onClick={() => handleDeleteAnnouncement(a.id)}
-                        className="mt-1 text-xs text-red-600 hover:underline"
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
+              {announcementsLoading ? (
+                <div className="text-gray-500">Loading announcements...</div>
+              ) : announcementsError ? (
+                <div className="text-red-500">Failed to load announcements</div>
+              ) : !announcements || !Array.isArray(announcements) ? (
+                <div className="text-gray-500">No announcements available</div>
+              ) : announcements.length === 0 ? (
+                <div className="text-gray-500">No announcements yet.</div>
+              ) : (
+                <ul>
+                  {announcements.map(a => (
+                    <li key={a.id} className="mb-4 border-b pb-2">
+                      <div className="font-bold" style={{ color: '#229eff' }}>{a.title}</div>
+                      <div className="text-gray-700 text-sm mb-1">{a.content}</div>
+                      <div className="text-gray-500 text-xs">Posted by {a.author} on {formatDate(a.createdAt)}</div>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteAnnouncement(a.id)}
+                          className="text-red-600 hover:text-red-700 text-xs font-medium mt-1"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
               {isAdmin && (
                 <div className="mt-4 pt-4 border-t">
                   <h3 className="font-semibold mb-2">Post Announcement</h3>

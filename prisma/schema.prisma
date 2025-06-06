@@ -28,6 +28,7 @@ model User {
   resetToken    String?
   resetTokenExpiry DateTime?
   rideOffers    RideOffer[] @relation("UserRideOffers")
+  announcements Announcement[] @relation("UserAnnouncements")
 }
 
 model Event {
@@ -44,6 +45,7 @@ model Event {
   rideRequests RideRequest[]
   rideOffers  RideOffer[]
   carpools    Carpool[]
+  announcements Announcement[]
 }
 
 model RSVP {
@@ -112,31 +114,30 @@ model PollVote {
   @@unique([pollId, userId, optionIdx])
 }
 
+model RideOffer {
+  id             String   @id @default(cuid())
+  maxPassengers  Int      @default(1)
+  pickupLocation String   @default("")
+  pickupTime     DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation("UserRideOffers", fields: [userId], references: [id])
+  userId         String
+  event          Event    @relation(fields: [eventId], references: [id])
+  eventId        String
+}
+
 model Announcement {
   id        String   @id @default(cuid())
   title     String
   content   String
   author    String
   createdAt DateTime @default(now())
-}
-
-model ContactMessage {
-  id        String   @id @default(cuid())
-  name      String
-  email     String
-  message   String
-  createdAt DateTime @default(now())
-}
-
-model RideOffer {
-  id        String   @id @default(cuid())
-  event     Event    @relation(fields: [eventId], references: [id])
-  eventId   String
-  driver    User     @relation("UserRideOffers", fields: [driverId], references: [id])
-  driverId  String
-  capacity  Int
-  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  user      User     @relation("UserAnnouncements", fields: [userId], references: [id])
+  userId    String
+  event     Event?   @relation(fields: [eventId], references: [id])
+  eventId   String?
 }
 
 enum Role {
@@ -151,6 +152,6 @@ enum RSVPStatus {
 
 enum RequestStatus {
   PENDING
-  APPROVED
+  ACCEPTED
   REJECTED
 } 
