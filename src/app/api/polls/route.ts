@@ -68,4 +68,81 @@ export async function POST(req: Request) {
     console.error('POST /api/polls error:', error);
     return NextResponse.json({ error: error.message || 'Unknown error' }, { status: 500 });
   }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const idToken = authHeader.split('Bearer ')[1];
+    const decoded = await adminAuth.verifyIdToken(idToken);
+    const firebaseUid = decoded.uid;
+
+    // Ensure user exists in DB
+    let user = await prisma.user.findUnique({ where: { id: firebaseUid } });
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          id: firebaseUid,
+          name: decoded.email || 'User',
+          email: decoded.email || `user+${firebaseUid}@example.com`,
+          password: '',
+          role: 'MEMBER',
+        },
+      });
+    }
+
+    const { pollId, selectedOptions } = await req.json();
+    
+    // Validate poll exists and is active
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      include: { votes: true }
+    });
+
+    if (!poll) {
+      return NextResponse.json({ error: 'Poll not found' }, { status: 404 });
+    }
+
+    if (!poll.isActive) {
+      return NextResponse.json({ error: 'Poll is no longer active' }, { status: 400 });
+    }
+
+    // Check if user has already voted
+    const existingVote = poll.votes.find(vote => vote.userId === firebaseUid);
+    if (existingVote && !poll.multipleChoice) {
+      return NextResponse.json({ error: 'You have already voted on this poll' }, { status: 400 });
+    }
+
+    // Validate selected options
+    if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
+      return NextResponse.json({ error: 'Invalid vote data' }, { status: 400 });
+    }
+
+    // Create votes
+    const votes = await Promise.all(
+      selectedOptions.map(optionIdx =>
+        prisma.pollVote.create({
+          data: {
+            pollId,
+            userId: firebaseUid,
+            optionIdx
+          }
+        })
+      )
+    );
+
+    // Return updated poll
+    const updatedPoll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      include: { votes: true }
+    });
+
+    return NextResponse.json(updatedPoll);
+  } catch (error: any) {
+    console.error('PUT /api/polls error:', error);
+    return NextResponse.json({ error: error.message || 'Unknown error' }, { status: 500 });
+  }
 } 

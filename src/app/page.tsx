@@ -181,7 +181,8 @@ export default function DashboardPage() {
   const [needRideLoading, setNeedRideLoading] = useState(false)
 
   // Use SWR for data fetching
-  const { data: events = [], error: eventsError } = useSWR<Event[]>('/api/events', fetcher)
+  const { data: eventsData, error: eventsError } = useSWR<Event[]>('/api/events', fetcher)
+  const events = Array.isArray(eventsData) ? eventsData : []
   const { data: rsvpsData = [], error: rsvpsError } = useSWR<RSVP[]>('/api/rsvps', fetcher)
   const { data: carpools = [], error: carpoolsError } = useSWR<Carpool[]>('/api/carpools', fetcher)
   const { data: members = [], error: membersError } = useSWR<Member[]>('/api/members', fetcher)
@@ -362,19 +363,23 @@ export default function DashboardPage() {
       return
     }
     try {
-      // For single-choice polls, send one index; for multiple, send all
-      const optionIdx = poll.multipleChoice ? selectedIdxs : selectedIdxs[0]
-      const res = await fetch(`/api/polls/${poll.id}/vote`, {
-        method: 'POST',
+      const res = await fetch('/api/polls', {
+        method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${await user.getIdToken()}`
         },
-        body: JSON.stringify({ optionIdx })
+        body: JSON.stringify({ 
+          pollId: poll.id,
+          selectedOptions: selectedIdxs
+        })
       })
-      if (!res.ok) throw new Error('Failed to vote')
-      const pollsRes = await fetch('/api/polls')
-      if (pollsRes.ok) setPolls(await pollsRes.json())
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to vote')
+      }
+      // Update the polls data
+      await mutate('/api/polls')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to vote')
     }

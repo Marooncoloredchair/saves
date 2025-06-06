@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/auth'
 import { mutate } from 'swr'
 
 interface EventCardProps {
-  event: Event
+  event: Event | null
   onDelete?: () => void
 }
 
@@ -17,6 +17,10 @@ export default function EventCard({ event, onDelete }: EventCardProps) {
   const { user } = useAuth()
   const router = useRouter()
   const [isDeleting, setIsDeleting] = useState(false)
+
+  if (!event) {
+    return null
+  }
 
   const handleDelete = async () => {
     if (!user) {

@@ -2,9 +2,21 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { adminAuth } from '@/lib/firebaseAdmin';
 
+// Routes that don't require authentication
+const publicRoutes = [
+  '/api/events',
+  '/api/announcements',
+  '/api/health',
+];
+
 export async function middleware(req: NextRequest) {
   // Skip middleware for non-API routes
   if (!req.nextUrl.pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+
+  // Allow GET requests to public routes
+  if (req.method === 'GET' && publicRoutes.some(route => req.nextUrl.pathname.startsWith(route))) {
     return NextResponse.next();
   }
 

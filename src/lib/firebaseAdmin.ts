@@ -10,8 +10,14 @@ let adminAuth: Auth;
 try {
   // Properly format the private key
   const privateKey = process.env.FIREBASE_PRIVATE_KEY
-    .replace(/\\n/g, '\n')
-    .replace(/^"|"$/g, ''); // Remove surrounding quotes if present
+    ? process.env.FIREBASE_PRIVATE_KEY
+        .replace(/\\n/g, '\n')
+        .replace(/^"|"$/g, '') // Remove surrounding quotes if present
+    : '';
+
+  if (!privateKey) {
+    throw new Error('Invalid Firebase private key format');
+  }
 
   const firebaseAdminConfig = {
     credential: cert({
@@ -29,7 +35,7 @@ try {
   adminAuth = getAuth();
 } catch (error) {
   console.error('Firebase Admin initialization error:', error);
-  throw error;
+  throw new Error('Failed to initialize Firebase Admin: ' + (error as Error).message);
 }
 
 export { adminAuth }; 
